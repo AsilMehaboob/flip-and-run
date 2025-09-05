@@ -27,7 +27,9 @@ const GravityRunner = () => {
   const [gameStarted, setGameStarted] = useState(false);
   const [gameOver, setGameOver] = useState(false);
   const [score, setScore] = useState(0);
-  const [canvasSize, setCanvasSize] = useState({ width: 800, height: 400 });
+  const [distance, setDistance] = useState(0);
+  const [timeAlive, setTimeAlive] = useState(0);
+  const [canvasSize] = useState({ width: 360, height: 640 }); // Fixed mobile portrait
   const [highScore, setHighScore] = useState(() => {
     return parseInt(localStorage.getItem('gravityRunnerHighScore') || '0');
   });
@@ -50,55 +52,135 @@ const GravityRunner = () => {
     gameSpeed: 3,
     lastObstacleTime: 0,
     score: 0,
+    distance: 0,
+    startTime: 0,
     keys: {
       space: false
     }
   });
 
-  
-  // Dynamic game dimensions based on canvas size
+  // Fixed mobile dimensions
   const GRAVITY = 0.8;
   const JUMP_FORCE = -15;
   const getGroundY = () => canvasSize.height - 50;
   const getCeilingY = () => 50;
-  const getPlayerSize = () => Math.max(20, Math.min(40, canvasSize.width * 0.04));
-  
-  // Update canvas size based on viewport
-  const updateCanvasSize = useCallback(() => {
-    const maxWidth = window.innerWidth - 32; // Account for padding
-    const maxHeight = window.innerHeight - 200; // Account for UI elements
-    
-    // Maintain aspect ratio while fitting screen
-    let width = Math.min(maxWidth, Math.max(320, maxWidth));
-    let height = Math.min(maxHeight, Math.max(200, maxHeight * 0.6));
-    
-    // Ensure minimum playable size
-    if (width < 320) width = 320;
-    if (height < 200) height = 200;
-    
-    setCanvasSize({ width, height });
-  }, []);
+  const getPlayerSize = () => 25; // Fixed size for mobile
 
+  // Progressive difficulty system
+  const getDifficultyLevel = (score: number) => Math.floor(score / 100);
+  const getObstacleSpacing = (level: number) => Math.max(800, 1500 - (level * 100));
+  const getObstacleVariety = (level: number) => Math.min(4, 1 + Math.floor(level / 2));
+  
   const createObstacle = useCallback(() => {
     const now = Date.now();
-    if (now - gameState.current.lastObstacleTime < 2000) return;
-
-    const isTop = Math.random() < 0.5;
-    const obstacleHeight = canvasSize.height * 0.2; // 20% of canvas height
-    const obstacleWidth = Math.max(15, canvasSize.width * 0.025);
+    const level = getDifficultyLevel(gameState.current.score);
+    const spacing = getObstacleSpacing(level);
     
+    if (now - gameState.current.lastObstacleTime < spacing) return;
+
+    const variety = getObstacleVariety(level);
+    const pattern = Math.floor(Math.random() * variety);
+    
+    // Different obstacle patterns based on difficulty
+    switch (pattern) {
+      case 0: // Single obstacle
+        createSingleObstacle(now);
+        break;
+      case 1: // Double stack (top and bottom)
+        createDoubleObstacle(now);
+        break;
+      case 2: // Narrow gap
+        createNarrowGap(now);
+        break;
+      case 3: // Spike pattern
+        createSpikePattern(now);
+        break;
+      default:
+        createSingleObstacle(now);
+    }
+
+    gameState.current.lastObstacleTime = now;
+  }, []);
+
+  const createSingleObstacle = (id: number) => {
+    const isTop = Math.random() < 0.5;
+    const height = canvasSize.height * (0.15 + Math.random() * 0.15);
     const obstacle: Obstacle = {
-      id: now,
+      id,
       x: canvasSize.width,
-      y: isTop ? getCeilingY() : getGroundY() - obstacleHeight,
-      width: obstacleWidth,
-      height: obstacleHeight,
+      y: isTop ? getCeilingY() : getGroundY() - height,
+      width: 20,
+      height,
       isTop
     };
-
     gameState.current.obstacles.push(obstacle);
-    gameState.current.lastObstacleTime = now;
-  }, [canvasSize]);
+  };
+
+  const createDoubleObstacle = (id: number) => {
+    const gap = canvasSize.height * 0.4;
+    const topHeight = canvasSize.height * 0.2;
+    const bottomHeight = canvasSize.height - gap - topHeight - 100;
+    
+    gameState.current.obstacles.push({
+      id: id,
+      x: canvasSize.width,
+      y: getCeilingY(),
+      width: 20,
+      height: topHeight,
+      isTop: true
+    });
+    
+    gameState.current.obstacles.push({
+      id: id + 0.1,
+      x: canvasSize.width,
+      y: getGroundY() - bottomHeight,
+      width: 20,
+      height: bottomHeight,
+      isTop: false
+    });
+  };
+
+  const createNarrowGap = (id: number) => {
+    const gap = Math.max(80, canvasSize.height * 0.25);
+    const gapStart = getCeilingY() + 50 + Math.random() * (canvasSize.height - gap - 150);
+    
+    gameState.current.obstacles.push({
+      id: id,
+      x: canvasSize.width,
+      y: getCeilingY(),
+      width: 25,
+      height: gapStart - getCeilingY(),
+      isTop: true
+    });
+    
+    gameState.current.obstacles.push({
+      id: id + 0.1,
+      x: canvasSize.width,
+      y: gapStart + gap,
+      width: 25,
+      height: getGroundY() - (gapStart + gap),
+      isTop: false
+    });
+  };
+
+  const createSpikePattern = (id: number) => {
+    const spikeCount = 3 + Math.floor(Math.random() * 3);
+    const spacing = 15;
+    
+    for (let i = 0; i < spikeCount; i++) {
+      const isTop = Math.random() < 0.5;
+      const height = 40 + Math.random() * 60;
+      
+      gameState.current.obstacles.push({
+        id: id + i * 0.1,
+        x: canvasSize.width + i * spacing,
+        y: isTop ? getCeilingY() : getGroundY() - height,
+        width: 12,
+        height,
+        isTop
+      });
+    }
+  };
 
   const createParticles = useCallback((x: number, y: number) => {
     for (let i = 0; i < 8; i++) {
@@ -124,6 +206,14 @@ const GravityRunner = () => {
   const updateGame = useCallback(() => {
     const state = gameState.current;
     const player = state.player;
+
+    // Update distance and time tracking
+    state.distance += state.gameSpeed;
+    const currentTime = Date.now();
+    if (state.startTime === 0) state.startTime = currentTime;
+    const timeAliveSeconds = Math.floor((currentTime - state.startTime) / 1000);
+    setDistance(Math.floor(state.distance));
+    setTimeAlive(timeAliveSeconds);
 
     // Handle gravity flip
     if (state.keys.space && !player.isFlipping) {
@@ -206,9 +296,12 @@ const GravityRunner = () => {
       return particle.life > 0;
     });
 
-    // Increase game speed gradually
-    state.gameSpeed = Math.min(8, 3 + state.score * 0.01);
-  }, [createObstacle, createParticles, checkCollision, highScore, canvasSize]);
+    // Progressive speed increase - gets faster with distance and levels
+    const level = getDifficultyLevel(state.score);
+    const baseSpeed = 4;
+    const speedMultiplier = 1 + (level * 0.3) + (state.distance * 0.0001);
+    state.gameSpeed = Math.min(12, baseSpeed * speedMultiplier);
+  }, [createObstacle, createParticles, checkCollision, highScore]);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -287,13 +380,15 @@ const GravityRunner = () => {
     setGameStarted(true);
     setGameOver(false);
     setScore(0);
+    setDistance(0);
+    setTimeAlive(0);
     
     const playerSize = getPlayerSize();
     const startY = canvasSize.height / 2;
     
     gameState.current = {
       player: {
-        x: canvasSize.width * 0.15, // 15% from left edge
+        x: canvasSize.width * 0.15,
         y: startY,
         width: playerSize,
         height: playerSize,
@@ -305,13 +400,15 @@ const GravityRunner = () => {
       },
       obstacles: [],
       particles: [],
-      gameSpeed: Math.max(2, canvasSize.width * 0.005), // Speed relative to canvas width
+      gameSpeed: 4,
       lastObstacleTime: 0,
       score: 0,
+      distance: 0,
+      startTime: 0,
       keys: { space: false }
     };
     toast.success("Game Started! Press SPACE to flip gravity!");
-  }, [canvasSize]);
+  }, []);
 
   const resetGame = useCallback(() => {
     setGameStarted(false);
@@ -366,26 +463,14 @@ const GravityRunner = () => {
     }
   }, [gameStarted, gameOver, startGame]);
 
-  // Initialize canvas size and resize handler
-  useEffect(() => {
-    updateCanvasSize();
-    
-    const handleResize = () => {
-      updateCanvasSize();
-    };
-    
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [updateCanvasSize]);
-
-  // Update canvas dimensions when canvasSize changes
+  // Initialize canvas dimensions
   useEffect(() => {
     const canvas = canvasRef.current;
     if (canvas) {
       canvas.width = canvasSize.width;
       canvas.height = canvasSize.height;
     }
-  }, [canvasSize]);
+  }, []);
 
   // Start game loop
   useEffect(() => {
@@ -407,21 +492,35 @@ const GravityRunner = () => {
           <h1 className="text-2xl sm:text-4xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent mb-2">
             Gravity Runner
           </h1>
-          <div className="flex justify-center gap-4 sm:gap-8 text-sm sm:text-lg">
-            <div>Score: <span className="text-primary font-bold">{score}</span></div>
-            <div>High Score: <span className="text-accent font-bold">{highScore}</span></div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 text-xs sm:text-sm">
+            <div className="text-center">
+              <div className="text-primary font-bold text-lg">{score}</div>
+              <div className="text-muted-foreground">Score</div>
+            </div>
+            <div className="text-center">
+              <div className="text-accent font-bold text-lg">{distance}m</div>
+              <div className="text-muted-foreground">Distance</div>
+            </div>
+            <div className="text-center">
+              <div className="text-secondary font-bold text-lg">{timeAlive}s</div>
+              <div className="text-muted-foreground">Time</div>
+            </div>
+            <div className="text-center">
+              <div className="text-primary font-bold text-lg">{highScore}</div>
+              <div className="text-muted-foreground">Best</div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Game Canvas Container */}
+      {/* Game Canvas Container - Fixed Mobile Portrait */}
       <div className="flex-1 flex items-center justify-center p-2">
-        <div className="relative w-full h-full max-w-none">
+        <div className="relative aspect-[9/16] w-full max-w-sm max-h-full">
           <canvas
             ref={canvasRef}
             width={canvasSize.width}
             height={canvasSize.height}
-            className="w-full h-full border border-border rounded-lg cursor-pointer game-glow bg-game-bg"
+            className="w-full h-full border border-border rounded-lg cursor-pointer game-glow bg-game-bg object-contain"
             onClick={handleTouch}
             style={{ touchAction: 'none' }}
           />
