@@ -8,35 +8,55 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Game Colors - Neon Cyber Theme */
+    --background: 220 20% 6%;
+    --foreground: 200 100% 95%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card: 220 20% 8%;
+    --card-foreground: 200 100% 95%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover: 220 20% 8%;
+    --popover-foreground: 200 100% 95%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 280 100% 70%;
+    --primary-foreground: 220 20% 6%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 180 100% 60%;
+    --secondary-foreground: 220 20% 6%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 220 20% 12%;
+    --muted-foreground: 200 50% 70%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 330 100% 60%;
+    --accent-foreground: 220 20% 6%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 100% 60%;
+    --destructive-foreground: 220 20% 6%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --border: 220 20% 15%;
+    --input: 220 20% 15%;
+    --ring: 280 100% 70%;
 
-    --radius: 0.5rem;
+    /* Game-specific colors */
+    --game-bg: 220 25% 4%;
+    --game-floor: 200 80% 50%;
+    --game-ceiling: 200 80% 50%;
+    --player: 280 100% 70%;
+    --obstacle: 0 100% 60%;
+    --particle: 180 100% 80%;
+    --neon-glow: 280 100% 70%;
+    
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(280 100% 70%), hsl(330 100% 60%));
+    --gradient-bg: linear-gradient(180deg, hsl(220 25% 4%), hsl(220 20% 6%));
+    --gradient-glow: radial-gradient(circle, hsl(280 100% 70% / 0.3), transparent);
+    
+    /* Shadows & Effects */
+    --shadow-neon: 0 0 20px hsl(280 100% 70% / 0.5);
+    --shadow-game: 0 0 40px hsl(280 100% 70% / 0.3);
+    --glow-pulse: 0 0 30px hsl(280 100% 70% / 0.8);
+
+    --radius: 0.75rem;
 
     --sidebar-background: 0 0% 98%;
 
@@ -101,5 +121,77 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+@layer utilities {
+  /* Game-specific utilities */
+  .game-bg {
+    background: var(--gradient-bg);
+  }
+  
+  .neon-glow {
+    box-shadow: var(--shadow-neon);
+  }
+  
+  .game-glow {
+    box-shadow: var(--shadow-game);
+  }
+  
+  .pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite alternate;
+  }
+  
+  .flip-animation {
+    animation: flip 0.3s ease-out;
+  }
+  
+  .obstacle-move {
+    animation: obstacle-move linear;
+  }
+  
+  .particle-float {
+    animation: particle-float 1s ease-out forwards;
+  }
+}
+
+@keyframes pulse-glow {
+  from {
+    box-shadow: var(--shadow-neon);
+  }
+  to {
+    box-shadow: var(--glow-pulse);
+  }
+}
+
+@keyframes flip {
+  0% {
+    transform: rotateY(0deg);
+  }
+  50% {
+    transform: rotateY(180deg) scale(1.1);
+  }
+  100% {
+    transform: rotateY(360deg);
+  }
+}
+
+@keyframes obstacle-move {
+  from {
+    transform: translateX(100vw);
+  }
+  to {
+    transform: translateX(-100px);
+  }
+}
+
+@keyframes particle-float {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-50px) scale(0.5);
   }
 }
