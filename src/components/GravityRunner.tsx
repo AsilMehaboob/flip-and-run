@@ -27,6 +27,7 @@ const GravityRunner = () => {
   const [gameStarted, setGameStarted] = useState(false);
   const [gameOver, setGameOver] = useState(false);
   const [score, setScore] = useState(0);
+  const [canvasSize, setCanvasSize] = useState({ width: 800, height: 400 });
   const [highScore, setHighScore] = useState(() => {
     return parseInt(localStorage.getItem('gravityRunnerHighScore') || '0');
   });
@@ -54,30 +55,50 @@ const GravityRunner = () => {
     }
   });
 
-  const CANVAS_WIDTH = 800;
-  const CANVAS_HEIGHT = 400;
+  
+  // Dynamic game dimensions based on canvas size
   const GRAVITY = 0.8;
   const JUMP_FORCE = -15;
-  const GROUND_Y = CANVAS_HEIGHT - 50;
-  const CEILING_Y = 50;
+  const getGroundY = () => canvasSize.height - 50;
+  const getCeilingY = () => 50;
+  const getPlayerSize = () => Math.max(20, Math.min(40, canvasSize.width * 0.04));
+  
+  // Update canvas size based on viewport
+  const updateCanvasSize = useCallback(() => {
+    const maxWidth = window.innerWidth - 32; // Account for padding
+    const maxHeight = window.innerHeight - 200; // Account for UI elements
+    
+    // Maintain aspect ratio while fitting screen
+    let width = Math.min(maxWidth, Math.max(320, maxWidth));
+    let height = Math.min(maxHeight, Math.max(200, maxHeight * 0.6));
+    
+    // Ensure minimum playable size
+    if (width < 320) width = 320;
+    if (height < 200) height = 200;
+    
+    setCanvasSize({ width, height });
+  }, []);
 
   const createObstacle = useCallback(() => {
     const now = Date.now();
     if (now - gameState.current.lastObstacleTime < 2000) return;
 
     const isTop = Math.random() < 0.5;
+    const obstacleHeight = canvasSize.height * 0.2; // 20% of canvas height
+    const obstacleWidth = Math.max(15, canvasSize.width * 0.025);
+    
     const obstacle: Obstacle = {
       id: now,
-      x: CANVAS_WIDTH,
-      y: isTop ? CEILING_Y : GROUND_Y - 80,
-      width: 20,
-      height: 80,
+      x: canvasSize.width,
+      y: isTop ? getCeilingY() : getGroundY() - obstacleHeight,
+      width: obstacleWidth,
+      height: obstacleHeight,
       isTop
     };
 
     gameState.current.obstacles.push(obstacle);
     gameState.current.lastObstacleTime = now;
-  }, []);
+  }, [canvasSize]);
 
   const createParticles = useCallback((x: number, y: number) => {
     for (let i = 0; i < 8; i++) {
@@ -126,17 +147,20 @@ const GravityRunner = () => {
     player.y += player.velocityY;
 
     // Ground/ceiling collision
+    const groundY = getGroundY();
+    const ceilingY = getCeilingY();
+    
     if (!player.gravityFlipped) {
-      if (player.y + player.height >= GROUND_Y) {
-        player.y = GROUND_Y - player.height;
+      if (player.y + player.height >= groundY) {
+        player.y = groundY - player.height;
         player.velocityY = 0;
         player.onGround = true;
       } else {
         player.onGround = false;
       }
     } else {
-      if (player.y <= CEILING_Y) {
-        player.y = CEILING_Y;
+      if (player.y <= ceilingY) {
+        player.y = ceilingY;
         player.velocityY = 0;
         player.onGround = true;
       } else {
@@ -184,7 +208,7 @@ const GravityRunner = () => {
 
     // Increase game speed gradually
     state.gameSpeed = Math.min(8, 3 + state.score * 0.01);
-  }, [createObstacle, createParticles, checkCollision, highScore]);
+  }, [createObstacle, createParticles, checkCollision, highScore, canvasSize]);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -197,18 +221,18 @@ const GravityRunner = () => {
     const player = state.player;
 
     // Clear canvas with gradient background
-    const gradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
+    const gradient = ctx.createLinearGradient(0, 0, 0, canvasSize.height);
     gradient.addColorStop(0, 'hsl(220, 25%, 4%)');
     gradient.addColorStop(1, 'hsl(220, 20%, 6%)');
     ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
 
     // Draw floor and ceiling
     ctx.fillStyle = 'hsl(200, 80%, 50%)';
     ctx.shadowColor = 'hsl(200, 80%, 50%)';
     ctx.shadowBlur = 10;
-    ctx.fillRect(0, GROUND_Y, CANVAS_WIDTH, 50);
-    ctx.fillRect(0, 0, CANVAS_WIDTH, CEILING_Y);
+    ctx.fillRect(0, getGroundY(), canvasSize.width, 50);
+    ctx.fillRect(0, 0, canvasSize.width, getCeilingY());
     ctx.shadowBlur = 0;
 
     // Draw particles
@@ -249,7 +273,7 @@ const GravityRunner = () => {
     });
 
     ctx.shadowBlur = 0;
-  }, []);
+  }, [canvasSize]);
 
   const gameLoop = useCallback(() => {
     if (!gameOver && gameStarted) {
@@ -263,12 +287,16 @@ const GravityRunner = () => {
     setGameStarted(true);
     setGameOver(false);
     setScore(0);
+    
+    const playerSize = getPlayerSize();
+    const startY = canvasSize.height / 2;
+    
     gameState.current = {
       player: {
-        x: 100,
-        y: 300,
-        width: 30,
-        height: 30,
+        x: canvasSize.width * 0.15, // 15% from left edge
+        y: startY,
+        width: playerSize,
+        height: playerSize,
         velocityY: 0,
         onGround: true,
         gravityFlipped: false,
@@ -277,13 +305,13 @@ const GravityRunner = () => {
       },
       obstacles: [],
       particles: [],
-      gameSpeed: 3,
+      gameSpeed: Math.max(2, canvasSize.width * 0.005), // Speed relative to canvas width
       lastObstacleTime: 0,
       score: 0,
       keys: { space: false }
     };
     toast.success("Game Started! Press SPACE to flip gravity!");
-  }, []);
+  }, [canvasSize]);
 
   const resetGame = useCallback(() => {
     setGameStarted(false);
@@ -338,6 +366,27 @@ const GravityRunner = () => {
     }
   }, [gameStarted, gameOver, startGame]);
 
+  // Initialize canvas size and resize handler
+  useEffect(() => {
+    updateCanvasSize();
+    
+    const handleResize = () => {
+      updateCanvasSize();
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [updateCanvasSize]);
+
+  // Update canvas dimensions when canvasSize changes
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (canvas) {
+      canvas.width = canvasSize.width;
+      canvas.height = canvasSize.height;
+    }
+  }, [canvasSize]);
+
   // Start game loop
   useEffect(() => {
     if (gameStarted && !gameOver) {
@@ -351,32 +400,37 @@ const GravityRunner = () => {
   }, [gameStarted, gameOver, gameLoop]);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen game-bg p-4">
-      <Card className="p-6 bg-card/90 backdrop-blur-sm border-border neon-glow">
-        <div className="text-center mb-4">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent mb-2">
+    <div className="fixed inset-0 game-bg flex flex-col">
+      {/* Header */}
+      <div className="flex-shrink-0 p-4">
+        <div className="text-center">
+          <h1 className="text-2xl sm:text-4xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent mb-2">
             Gravity Runner
           </h1>
-          <div className="flex justify-center gap-8 text-lg">
+          <div className="flex justify-center gap-4 sm:gap-8 text-sm sm:text-lg">
             <div>Score: <span className="text-primary font-bold">{score}</span></div>
             <div>High Score: <span className="text-accent font-bold">{highScore}</span></div>
           </div>
         </div>
+      </div>
 
-        <div className="relative">
+      {/* Game Canvas Container */}
+      <div className="flex-1 flex items-center justify-center p-2">
+        <div className="relative w-full h-full max-w-none">
           <canvas
             ref={canvasRef}
-            width={CANVAS_WIDTH}
-            height={CANVAS_HEIGHT}
-            className="border border-border rounded-lg cursor-pointer game-glow"
+            width={canvasSize.width}
+            height={canvasSize.height}
+            className="w-full h-full border border-border rounded-lg cursor-pointer game-glow bg-game-bg"
             onClick={handleTouch}
+            style={{ touchAction: 'none' }}
           />
           
           {!gameStarted && !gameOver && (
             <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-lg">
-              <div className="text-center">
-                <h2 className="text-2xl font-bold text-primary mb-4">Ready to Run?</h2>
-                <p className="text-muted-foreground mb-4">Press SPACE or tap to flip gravity!</p>
+              <div className="text-center p-4">
+                <h2 className="text-xl sm:text-2xl font-bold text-primary mb-4">Ready to Run?</h2>
+                <p className="text-sm sm:text-base text-muted-foreground mb-4">Press SPACE or tap to flip gravity!</p>
                 <Button onClick={startGame} variant="default" className="neon-glow">
                   Start Game
                 </Button>
@@ -386,13 +440,13 @@ const GravityRunner = () => {
 
           {gameOver && (
             <div className="absolute inset-0 flex items-center justify-center bg-background/90 backdrop-blur-sm rounded-lg">
-              <div className="text-center">
-                <h2 className="text-3xl font-bold text-destructive mb-2">Game Over!</h2>
-                <p className="text-xl text-primary mb-2">Final Score: {score}</p>
+              <div className="text-center p-4">
+                <h2 className="text-2xl sm:text-3xl font-bold text-destructive mb-2">Game Over!</h2>
+                <p className="text-lg sm:text-xl text-primary mb-2">Final Score: {score}</p>
                 {score === highScore && score > 0 && (
                   <p className="text-accent font-bold mb-4">🎉 NEW HIGH SCORE! 🎉</p>
                 )}
-                <p className="text-muted-foreground mb-4">Press SPACE or tap to play again!</p>
+                <p className="text-sm sm:text-base text-muted-foreground mb-4">Press SPACE or tap to play again!</p>
                 <Button onClick={startGame} variant="default" className="neon-glow">
                   Play Again
                 </Button>
@@ -400,11 +454,14 @@ const GravityRunner = () => {
             </div>
           )}
         </div>
+      </div>
 
-        <div className="text-center mt-4 text-sm text-muted-foreground">
+      {/* Footer Instructions */}
+      <div className="flex-shrink-0 p-2">
+        <div className="text-center text-xs sm:text-sm text-muted-foreground">
           <p>Use SPACE or tap to flip gravity • Avoid obstacles • Score points!</p>
         </div>
-      </Card>
+      </div>
     </div>
   );
 };
